@@ -1546,6 +1546,12 @@ static struct fsl_mc_device *setup_dpcon(struct dpaa2_eth_priv *priv)
 		goto err_open;
 	}
 
+	err = dpcon_reset(priv->mc_io, 0, dpcon->mc_handle);
+	if (err) {
+		dev_err(dev, "dpcon_reset() failed\n");
+		goto err_reset;
+	}
+
 	err = dpcon_get_attributes(priv->mc_io, 0, dpcon->mc_handle, &attrs);
 	if (err) {
 		dev_err(dev, "dpcon_get_attributes() failed\n");
@@ -1562,6 +1568,7 @@ static struct fsl_mc_device *setup_dpcon(struct dpaa2_eth_priv *priv)
 
 err_enable:
 err_get_attr:
+err_reset:
 	dpcon_close(priv->mc_io, 0, dpcon->mc_handle);
 err_open:
 	fsl_mc_object_free(dpcon);
@@ -1827,6 +1834,12 @@ static int setup_dpbp(struct dpaa2_eth_priv *priv)
 		goto err_open;
 	}
 
+	err = dpbp_reset(priv->mc_io, 0, dpbp_dev->mc_handle);
+	if (err) {
+		dev_err(dev, "dpbp_reset() failed\n");
+		goto err_reset;
+	}
+
 	err = dpbp_enable(priv->mc_io, 0, dpbp_dev->mc_handle);
 	if (err) {
 		dev_err(dev, "dpbp_enable() failed\n");
@@ -1845,6 +1858,7 @@ static int setup_dpbp(struct dpaa2_eth_priv *priv)
 err_get_attr:
 	dpbp_disable(priv->mc_io, 0, dpbp_dev->mc_handle);
 err_enable:
+err_reset:
 	dpbp_close(priv->mc_io, 0, dpbp_dev->mc_handle);
 err_open:
 	fsl_mc_object_free(dpbp_dev);
@@ -1883,6 +1897,12 @@ static int setup_dpni(struct fsl_mc_device *ls_dev)
 
 	ls_dev->mc_io = priv->mc_io;
 	ls_dev->mc_handle = priv->mc_token;
+
+	err = dpni_reset(priv->mc_io, 0, priv->mc_token);
+	if (err) {
+		dev_err(dev, "dpni_reset() failed\n");
+		goto err_reset;
+	}
 
 	/* Map a memory region which will be used by MC to pass us an
 	 * attribute structure
@@ -1992,6 +2012,7 @@ err_get_attr:
 err_dma_map:
 	kfree(dma_mem);
 err_alloc:
+err_reset:
 	dpni_close(priv->mc_io, 0, priv->mc_token);
 err_open:
 	return err;
