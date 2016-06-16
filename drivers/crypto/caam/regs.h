@@ -107,9 +107,9 @@
 #ifdef CONFIG_ARCH_DMA_ADDR_T_64BIT
 #ifdef CONFIG_SOC_IMX7D
 #define wr_dma(value) (((u64)cpu_to_caam32(lower_32_bits(value)) << 32) | \
-			(u64)cpu_to_caam32(higher_32_bits(value)))
+			(u64)cpu_to_caam32(upper_32_bits(value)))
 #define rd_dma(value) (((u64)caam32_to_cpu(lower_32_bits(value)) << 32) | \
-			(u64)caam32_to_cpu(higher_32_bits(value)))
+			(u64)caam32_to_cpu(upper_32_bits(value)))
 #else
 #define wr_dma(value) cpu_to_caam64(value)
 #define rd_dma(value) caam64_to_cpu(value)
