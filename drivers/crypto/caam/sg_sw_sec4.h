@@ -15,7 +15,7 @@ struct sec4_sg_entry;
 static inline void dma_to_sec4_sg_one(struct sec4_sg_entry *sec4_sg_ptr,
 				      dma_addr_t dma, u32 len, u16 offset)
 {
-	sec4_sg_ptr->ptr = wr_dma(dma);
+	sec4_sg_ptr->ptr = wr_dma64(dma);
 	sec4_sg_ptr->len = cpu_to_caam32(len);
 	sec4_sg_ptr->buf_pool_id = 0;
 	sec4_sg_ptr->offset = cpu_to_caam16(offset & SEC4_SG_OFFSET_MASK);

@@ -119,6 +119,13 @@
 #define rd_dma(value) caam32_to_cpu(value)
 #endif
 
+#ifdef CONFIG_SOC_IMX7D
+#define wr_dma64(value) (((u64)cpu_to_caam32(lower_32_bits(value)) << 32) | \
+			 (u64)cpu_to_caam32(upper_32_bits(value)))
+#else
+#define wr_dma64(value) cpu_to_caam64(value)
+#endif
+
 #ifdef CONFIG_64BIT
 #ifdef CONFIG_PPC
 #ifdef CONFIG_CRYPTO_DEV_FSL_CAAM_LE
