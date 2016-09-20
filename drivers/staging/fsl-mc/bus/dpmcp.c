@@ -54,7 +54,7 @@ int dpmcp_open(struct fsl_mc_io *mc_io,
 		return err;
 
 	/* retrieve response parameters */
-	*token = MC_CMD_HDR_READ_TOKEN(cmd.header);
+	*token = get_mc_cmd_hdr_token(cmd.header);
 
 	return err;
 }

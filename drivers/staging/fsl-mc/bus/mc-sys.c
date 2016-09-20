@@ -56,8 +56,6 @@
 #define MC_CMD_COMPLETION_POLLING_MIN_SLEEP_USECS    10
 #define MC_CMD_COMPLETION_POLLING_MAX_SLEEP_USECS    500
 
-#define MC_CMD_HDR_READ_CMDID(_hdr) \
-	((uint16_t)mc_dec((_hdr), MC_CMD_HDR_CMDID_O, MC_CMD_HDR_CMDID_S))
 
 /**
  * dpmcp_irq0_handler - Regular ISR for DPMCP interrupt 0
@@ -643,10 +641,8 @@ int mc_send_command(struct fsl_mc_io *mc_io, struct mc_command *cmd)
 		if (error == -ETIMEDOUT) {
 			pr_debug("MC command timed out (portal: %#llx, obj handle: %#x, command: %#x)\n",
 				 mc_io->portal_phys_addr,
-				 (unsigned int)
-					MC_CMD_HDR_READ_TOKEN(cmd->header),
-				 (unsigned int)
-					MC_CMD_HDR_READ_CMDID(cmd->header));
+				 (unsigned int) get_mc_cmd_hdr_token(cmd->header),
+				 (unsigned int) get_mc_cmd_hdr_cmdid(cmd->header));
 		}
 		goto common_exit;
 
@@ -655,8 +651,8 @@ int mc_send_command(struct fsl_mc_io *mc_io, struct mc_command *cmd)
 	if (status != MC_CMD_STATUS_OK) {
 		pr_debug("MC command failed: portal: %#llx, obj handle: %#x, command: %#x, status: %s (%#x)\n",
 			 mc_io->portal_phys_addr,
-			 (unsigned int)MC_CMD_HDR_READ_TOKEN(cmd->header),
-			 (unsigned int)MC_CMD_HDR_READ_CMDID(cmd->header),
+			 (unsigned int)get_mc_cmd_hdr_token(cmd->header),
+			 (unsigned int)get_mc_cmd_hdr_cmdid(cmd->header),
 			 mc_status_to_string(status),
 			 (unsigned int)status);
 
