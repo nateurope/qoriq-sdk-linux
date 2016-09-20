@@ -146,7 +146,7 @@ int dpmcp_set_irq(struct fsl_mc_io *mc_io,
 	cmd.params[0] |= mc_enc(0, 8, irq_index);
 	cmd.params[0] |= mc_enc(32, 32, irq_cfg->val);
 	cmd.params[1] |= mc_enc(0, 64, irq_cfg->paddr);
-	cmd.params[2] |= mc_enc(0, 32, irq_cfg->irq_num);
+	cmd.params[2] |= mc_enc(0, 32, irq_cfg->user_irq_id);
 
 	/* send command to mc*/
 	return mc_send_command(mc_io, &cmd);
@@ -176,7 +176,7 @@ int dpmcp_get_irq(struct fsl_mc_io *mc_io,
 	/* retrieve response parameters */
 	irq_cfg->val = (uint32_t)mc_dec(cmd.params[0], 0, 32);
 	irq_cfg->paddr = (uint64_t)mc_dec(cmd.params[1], 0, 64);
-	irq_cfg->irq_num = (int)mc_dec(cmd.params[2], 0, 32);
+	irq_cfg->user_irq_id = (int)mc_dec(cmd.params[2], 0, 32);
 	*type = (int)mc_dec(cmd.params[2], 32, 32);
 	return 0;
 }

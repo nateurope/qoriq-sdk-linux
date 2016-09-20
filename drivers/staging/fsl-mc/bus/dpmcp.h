@@ -159,12 +159,12 @@ int dpmcp_reset(struct fsl_mc_io	*mc_io,
  * struct dpmcp_irq_cfg - IRQ configuration
  * @paddr:	Address that must be written to signal a message-based interrupt
  * @val:	Value to write into irq_addr address
- * @irq_num: A user defined number associated with this IRQ
+ * @user_irq_id: A user defined number associated with this IRQ
  */
 struct dpmcp_irq_cfg {
 	     uint64_t		paddr;
 	     uint32_t		val;
-	     int		irq_num;
+	     int		user_irq_id;
 };
 
 /**
