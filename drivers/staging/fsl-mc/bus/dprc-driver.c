@@ -705,16 +705,16 @@ static int dprc_create_dpmcp(struct fsl_mc_device *dprc_dev)
 {
 	int error;
 	struct dpmcp_cfg dpmcp_cfg;
-	uint16_t dpmcp_handle;
+	uint32_t dpmcp_obj_id;
 	struct dprc_res_req res_req;
-	struct dpmcp_attr dpmcp_attr;
 	struct fsl_mc_bus *mc_bus = to_fsl_mc_bus(dprc_dev);
 
 	dpmcp_cfg.portal_id = mc_bus->dprc_attr.portal_id;
 	error = dpmcp_create(dprc_dev->mc_io,
+			     dprc_dev->mc_handle,
 			     MC_CMD_FLAG_INTR_DIS,
 			     &dpmcp_cfg,
-			     &dpmcp_handle);
+			     &dpmcp_obj_id);
 	if (error < 0) {
 		dev_err(&dprc_dev->dev, "dpmcp_create() failed: %d\n",
 			error);
@@ -725,17 +725,7 @@ static int dprc_create_dpmcp(struct fsl_mc_device *dprc_dev)
 	 * Set the state of the newly created DPMCP object to be "plugged":
 	 */
 
-	error = dpmcp_get_attributes(dprc_dev->mc_io,
-				     MC_CMD_FLAG_INTR_DIS,
-				     dpmcp_handle,
-				     &dpmcp_attr);
-	if (error < 0) {
-		dev_err(&dprc_dev->dev, "dpmcp_get_attributes() failed: %d\n",
-			error);
-		goto error_destroy_dpmcp;
-	}
-
-	if (WARN_ON(dpmcp_attr.id != mc_bus->dprc_attr.portal_id)) {
+	if (WARN_ON(dpmcp_obj_id != mc_bus->dprc_attr.portal_id)) {
 		error = -EINVAL;
 		goto error_destroy_dpmcp;
 	}
@@ -744,7 +734,7 @@ static int dprc_create_dpmcp(struct fsl_mc_device *dprc_dev)
 	res_req.num = 1;
 	res_req.options =
 			(DPRC_RES_REQ_OPT_EXPLICIT | DPRC_RES_REQ_OPT_PLUGGED);
-	res_req.id_base_align = dpmcp_attr.id;
+	res_req.id_base_align = dpmcp_obj_id;
 
 	error = dprc_assign(dprc_dev->mc_io,
 			    MC_CMD_FLAG_INTR_DIS,
@@ -757,15 +747,13 @@ static int dprc_create_dpmcp(struct fsl_mc_device *dprc_dev)
 		goto error_destroy_dpmcp;
 	}
 
-	(void)dpmcp_close(dprc_dev->mc_io,
-			  MC_CMD_FLAG_INTR_DIS,
-			  dpmcp_handle);
 	return 0;
 
 error_destroy_dpmcp:
 	(void)dpmcp_destroy(dprc_dev->mc_io,
+			    dprc_dev->mc_handle,
 			    MC_CMD_FLAG_INTR_DIS,
-			    dpmcp_handle);
+				dpmcp_obj_id);
 	return error;
 }
 
@@ -775,25 +763,15 @@ error_destroy_dpmcp:
 static void dprc_destroy_dpmcp(struct fsl_mc_device *dprc_dev)
 {
 	int error;
-	uint16_t dpmcp_handle;
 	struct fsl_mc_bus *mc_bus = to_fsl_mc_bus(dprc_dev);
 
 	if (WARN_ON(!dprc_dev->mc_io || dprc_dev->mc_io->dpmcp_dev))
 		return;
 
-	error = dpmcp_open(dprc_dev->mc_io,
-			   MC_CMD_FLAG_INTR_DIS,
-			   mc_bus->dprc_attr.portal_id,
-			   &dpmcp_handle);
-	if (error < 0) {
-		dev_err(&dprc_dev->dev, "dpmcp_open() failed: %d\n",
-			error);
-		return;
-	}
-
 	error = dpmcp_destroy(dprc_dev->mc_io,
+			      dprc_dev->mc_handle,
 			      MC_CMD_FLAG_INTR_DIS,
-			      dpmcp_handle);
+				  mc_bus->dprc_attr.portal_id);
 	if (error < 0) {
 		dev_err(&dprc_dev->dev, "dpmcp_destroy() failed: %d\n",
 			error);
@@ -818,6 +796,8 @@ static int dprc_probe(struct fsl_mc_device *mc_dev)
 	struct fsl_mc_bus *mc_bus = to_fsl_mc_bus(mc_dev);
 	bool mc_io_created = false;
 	bool dev_root_set = false;
+	uint16_t dprc_version_major;
+	uint16_t dprc_version_minor;
 
 	if (WARN_ON(strcmp(mc_dev->obj_desc.type, "dprc") != 0))
 		return -EINVAL;
@@ -861,22 +841,32 @@ static int dprc_probe(struct fsl_mc_device *mc_dev)
 		goto error_cleanup_mc_io;
 	}
 
+	/* check if MC supports compatible DPRC type version */
+	error = dprc_get_api_version(mc_dev->mc_io, 0,
+			&dprc_version_major, &dprc_version_minor);
+	if (error < 0) {
+		dev_err(&mc_dev->dev, "dprc_get_api_version() failed: %d\n",
+			error);
+		goto error_cleanup_open;
+	}
+
+	if (dprc_version_major < DPRC_MIN_VER_MAJOR ||
+	   (dprc_version_major == DPRC_MIN_VER_MAJOR &&
+		dprc_version_minor < DPRC_MIN_VER_MINOR)) {
+		dev_err(&mc_dev->dev,
+			"ERROR: DPRC version %d.%d not supported\n",
+			dprc_version_major,
+			dprc_version_minor);
+		error = -ENOTSUPP;
+		goto error_cleanup_open;
+	}
+
+	/* get container portal id */
 	error = dprc_get_attributes(mc_dev->mc_io, 0, mc_dev->mc_handle,
 				    &mc_bus->dprc_attr);
 	if (error < 0) {
 		dev_err(&mc_dev->dev, "dprc_get_attributes() failed: %d\n",
 			error);
-		goto error_cleanup_open;
-	}
-
-	if (mc_bus->dprc_attr.version.major < DPRC_MIN_VER_MAJOR ||
-	   (mc_bus->dprc_attr.version.major == DPRC_MIN_VER_MAJOR &&
-	    mc_bus->dprc_attr.version.minor < DPRC_MIN_VER_MINOR)) {
-		dev_err(&mc_dev->dev,
-			"ERROR: DPRC version %d.%d not supported\n",
-			mc_bus->dprc_attr.version.major,
-			mc_bus->dprc_attr.version.minor);
-		error = -ENOTSUPP;
 		goto error_cleanup_open;
 	}
 

@@ -55,6 +55,18 @@ struct fsl_mc_io;
 #define DPRC_GET_PORTAL_ID_FROM_POOL	(int)(~(0))
 
 /**
+ * dprc_get_container_id() - Get container ID associated with a given portal.
+ * @mc_io:	Pointer to MC portal's I/O object
+ * @cmd_flags:	Command flags; one or more of 'MC_CMD_FLAG_'
+ * @container_id:	Requested container ID
+ *
+ * Return:	'0' on Success; Error code otherwise.
+ */
+int dprc_get_container_id(struct fsl_mc_io	*mc_io,
+			  uint32_t		cmd_flags,
+			  int			*container_id);
+
+/**
  * dprc_open() - Open DPRC object for use
  * @mc_io:	Pointer to MC portal's I/O object
  * @cmd_flags:	Command flags; one or more of 'MC_CMD_FLAG_'
@@ -412,22 +424,12 @@ int dprc_clear_irq_status(struct fsl_mc_io	*mc_io,
  * @icid: Container's ICID
  * @portal_id: Container's portal ID
  * @options: Container's options as set at container's creation
- * @version: DPRC version
  */
 struct dprc_attributes {
 	int container_id;
 	uint16_t icid;
 	int portal_id;
 	uint64_t options;
-	/**
-	 * struct version - DPRC version
-	 * @major: DPRC major version
-	 * @minor: DPRC minor version
-	 */
-	struct {
-		uint16_t major;
-		uint16_t minor;
-	} version;
 };
 
 /**
@@ -986,5 +988,18 @@ int dprc_get_connection(struct fsl_mc_io		*mc_io,
 			struct dprc_endpoint		*endpoint2,
 			int				*state);
 
+/**
+ * dprc_get_api_version() - Get Data Path Resource Container API version
+ * @mc_io:  Pointer to MC portal's I/O object
+ * @cmd_flags:	Command flags; one or more of 'MC_CMD_FLAG_'
+ * @major_ver: 	Major version of data path resource container API
+ * @minor_ver: 	Minor version of data path resource container API
+ *
+ * Return:  '0' on Success; Error code otherwise.
+ */
+int dprc_get_api_version(struct fsl_mc_io *mc_io,
+			   uint32_t cmd_flags,
+			   uint16_t *major_ver,
+			   uint16_t *minor_ver);
 #endif /* _FSL_DPRC_H */
 

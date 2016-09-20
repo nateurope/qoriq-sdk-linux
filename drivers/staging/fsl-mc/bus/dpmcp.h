@@ -89,41 +89,53 @@ struct dpmcp_cfg {
 
 /**
  * dpmcp_create() - Create the DPMCP object.
+ *
  * @mc_io:	Pointer to MC portal's I/O object
+ * @dprc_token: parent container token; '0' for default container
  * @cmd_flags:	Command flags; one or more of 'MC_CMD_FLAG_'
  * @cfg:	Configuration structure
- * @token:	Returned token; use in subsequent API calls
+ * @obj_id: returns the object id or portal id.
  *
  * Create the DPMCP object, allocate required resources and
  * perform required initialization.
  *
  * The object can be created either by declaring it in the
  * DPL file, or by calling this function.
- * This function returns a unique authentication token,
- * associated with the specific object ID and the specific MC
- * portal; this token must be used in all subsequent calls to
- * this specific object. For objects that are created using the
- * DPL file, call dpmcp_open function to get an authentication
- * token first.
+ *
+ * The function accepts an authentication token of a parent
+ * container that this object should be assigned to. The token
+ * can be '0' so the object will be assigned to the default container.
+ * The newly created object can be opened with the returned
+ * object id and using the container's associated tokens and MC portals.
  *
  * Return:	'0' on Success; Error code otherwise.
  */
 int dpmcp_create(struct fsl_mc_io	*mc_io,
-		 uint32_t		cmd_flags,
-		 const struct dpmcp_cfg	*cfg,
-		 uint16_t		*token);
+		uint16_t	dprc_token,
+		uint32_t	cmd_flags,
+		const struct dpmcp_cfg	*cfg,
+		uint32_t	*obj_id);
 
 /**
  * dpmcp_destroy() - Destroy the DPMCP object and release all its resources.
+ *
  * @mc_io:	Pointer to MC portal's I/O object
+ * @dprc_token: MC v10.x - parent container token; '0' for default container
  * @cmd_flags:	Command flags; one or more of 'MC_CMD_FLAG_'
- * @token:	Token of DPMCP object
+ * @object_id:  Object id or portal id; it must be a valid id
+ *              within the container that created this object.
+ *
+ * The function accepts the authentication token of the parent
+ * container that created the object (not the one that currently owns
+ * the object). The object is searched within parent using the provided
+ * object_id. All tokens to the object must be closed before calling destroy.
  *
  * Return:	'0' on Success; error code otherwise.
  */
 int dpmcp_destroy(struct fsl_mc_io	*mc_io,
-		  uint32_t		cmd_flags,
-		  uint16_t		token);
+		uint16_t	dprc_token,
+		uint32_t	cmd_flags,
+		uint32_t	object_id);
 
 /**
  * dpmcp_reset() - Reset the DPMCP, returns the object to initial state.
@@ -290,19 +302,9 @@ int dpmcp_get_irq_status(struct fsl_mc_io	*mc_io,
 /**
  * struct dpmcp_attr - Structure representing DPMCP attributes
  * @id:		DPMCP object ID
- * @version:	DPMCP version
  */
 struct dpmcp_attr {
 	int id;
-	/**
-	 * struct version - Structure representing DPMCP version
-	 * @major:	DPMCP major version
-	 * @minor:	DPMCP minor version
-	 */
-	struct {
-		uint16_t major;
-		uint16_t minor;
-	} version;
 };
 
 /**
@@ -320,4 +322,17 @@ int dpmcp_get_attributes(struct fsl_mc_io	*mc_io,
 			 uint16_t		token,
 			 struct dpmcp_attr	*attr);
 
+/**
+ * dpmcp_get_api_version() - Get Data Path Management Command Portal API version
+ * @mc_io:  Pointer to MC portal's I/O object
+ * @cmd_flags:	Command flags; one or more of 'MC_CMD_FLAG_'
+ * @majorVer: 	Major version of data path management command portal API
+ * @minorVer: 	Minor version of data path management command portal API
+ *
+ * Return:  '0' on Success; Error code otherwise.
+ */
+int dpmcp_get_api_version(struct fsl_mc_io *mc_io,
+			   uint32_t cmd_flags,
+			   uint16_t *major_ver,
+			   uint16_t *minor_ver);
 #endif /* __FSL_DPMCP_H */
