@@ -227,7 +227,9 @@ static void dpaa2_eth_rx(struct dpaa2_eth_priv *priv,
 	dma_unmap_single(dev, addr, DPAA2_ETH_RX_BUF_SIZE, DMA_FROM_DEVICE);
 	vaddr = phys_to_virt(addr);
 
+	/* HWA - FAS, timestamp */
 	prefetch(vaddr + priv->buf_layout.private_data_size);
+	/* data / SG table */
 	prefetch(vaddr + dpaa2_fd_get_offset(fd));
 
 	percpu_stats = this_cpu_ptr(priv->percpu_stats);
@@ -239,6 +241,10 @@ static void dpaa2_eth_rx(struct dpaa2_eth_priv *priv,
 		struct dpaa2_sg_entry *sgt =
 				vaddr + dpaa2_fd_get_offset(fd);
 		skb = build_frag_skb(priv, ch, sgt);
+
+		/* prefetch newly built skb data */
+		prefetch(skb->data);
+
 		put_page(virt_to_head_page(vaddr));
 		percpu_extras->rx_sg_frames++;
 		percpu_extras->rx_sg_bytes += dpaa2_fd_get_len(fd);
@@ -249,8 +255,6 @@ static void dpaa2_eth_rx(struct dpaa2_eth_priv *priv,
 
 	if (unlikely(!skb))
 		goto err_build_skb;
-
-	prefetch(skb->data);
 
 	/* Get the timestamp value */
 	if (priv->ts_rx_en) {
@@ -354,6 +358,10 @@ static bool consume_frames(struct dpaa2_eth_channel *ch, int *rx_cleaned,
 		}
 
 		fd = dpaa2_dq_fd(dq);
+
+		/* prefetch the frame descriptor */
+		prefetch(fd);
+
 		fq = (struct dpaa2_eth_fq *)dpaa2_dq_fqd_ctx(dq);
 		fq->stats.frames++;
 
@@ -578,6 +586,9 @@ static void free_tx_fd(const struct dpaa2_eth_priv *priv,
 	fd_addr = dpaa2_fd_get_addr(fd);
 	skbh = phys_to_virt(fd_addr);
 	fd_single = (dpaa2_fd_get_format(fd) == dpaa2_fd_single);
+
+	/* HWA - FAS, timestamp (for Tx confirmation frames) */
+	prefetch((void *) skbh + priv->buf_layout.private_data_size);
 
 	if (fd_single) {
 		skb = *skbh;
