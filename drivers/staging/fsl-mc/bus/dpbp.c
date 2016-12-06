@@ -59,6 +59,7 @@ int dpbp_open(struct fsl_mc_io *mc_io,
 
 	return err;
 }
+EXPORT_SYMBOL(dpbp_open);
 
 int dpbp_close(struct fsl_mc_io *mc_io,
 	       uint32_t cmd_flags,
@@ -73,6 +74,7 @@ int dpbp_close(struct fsl_mc_io *mc_io,
 	/* send command to mc*/
 	return mc_send_command(mc_io, &cmd);
 }
+EXPORT_SYMBOL(dpbp_close);
 
 int dpbp_create(struct fsl_mc_io *mc_io,
 		uint16_t dprc_token,
@@ -131,6 +133,7 @@ int dpbp_enable(struct fsl_mc_io *mc_io,
 	/* send command to mc*/
 	return mc_send_command(mc_io, &cmd);
 }
+EXPORT_SYMBOL(dpbp_enable);
 
 int dpbp_disable(struct fsl_mc_io *mc_io,
 		 uint32_t cmd_flags,
@@ -146,6 +149,7 @@ int dpbp_disable(struct fsl_mc_io *mc_io,
 	/* send command to mc*/
 	return mc_send_command(mc_io, &cmd);
 }
+EXPORT_SYMBOL(dpbp_disable);
 
 int dpbp_is_enabled(struct fsl_mc_io *mc_io,
 		    uint32_t cmd_flags,
@@ -183,6 +187,7 @@ int dpbp_reset(struct fsl_mc_io *mc_io,
 	/* send command to mc*/
 	return mc_send_command(mc_io, &cmd);
 }
+EXPORT_SYMBOL(dpbp_reset);
 
 int dpbp_set_irq(struct fsl_mc_io	*mc_io,
 		 uint32_t		cmd_flags,
@@ -400,6 +405,7 @@ int dpbp_get_attributes(struct fsl_mc_io *mc_io,
 
 	return 0;
 }
+EXPORT_SYMBOL(dpbp_get_attributes);
 
 int dpbp_set_notifications(struct fsl_mc_io	*mc_io,
 			   uint32_t		cmd_flags,
