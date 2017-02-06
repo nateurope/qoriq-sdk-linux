@@ -950,6 +950,7 @@ static int seed_pool(struct dpaa2_eth_priv *priv, u16 bpid)
 	 */
 	preempt_disable();
 	for (j = 0; j < priv->num_channels; j++) {
+		priv->channel[j]->buf_count = 0;
 		for (i = 0; i < priv->num_bufs;
 		     i += DPAA2_ETH_BUFS_PER_CMD) {
 			new_count = add_bufs(priv, bpid);
@@ -997,15 +998,10 @@ static void drain_bufs(struct dpaa2_eth_priv *priv, int count)
 
 static void drain_pool(struct dpaa2_eth_priv *priv)
 {
-	int i;
-
 	preempt_disable();
 	drain_bufs(priv, DPAA2_ETH_BUFS_PER_CMD);
 	drain_bufs(priv, 1);
 	preempt_enable();
-
-	for (i = 0; i < priv->num_channels; i++)
-		priv->channel[i]->buf_count = 0;
 }
 
 /* Function is called from softirq context only, so we don't need to guard
@@ -1172,6 +1168,18 @@ static int dpaa2_eth_open(struct net_device *net_dev)
 	struct dpaa2_eth_priv *priv = netdev_priv(net_dev);
 	int err;
 
+	/* We'll only start the txqs when the link is actually ready; make sure
+	 * we don't race against the link up notification, which may come
+	 * immediately after dpni_enable();
+	 */
+	netif_tx_stop_all_queues(net_dev);
+
+	/* Also, explicitly set carrier off, otherwise netif_carrier_ok() will
+	 * return true and cause 'ip link show' to report the LOWER_UP flag,
+	 * even though the link notification wasn't even received.
+	 */
+	netif_carrier_off(net_dev);
+
 	err = seed_pool(priv, priv->bpid);
 	if (err) {
 		/* Not much to do; the buffer pool, though not filled up,
@@ -1182,17 +1190,10 @@ static int dpaa2_eth_open(struct net_device *net_dev)
 			   priv->dpbp_dev->obj_desc.id, priv->bpid);
 	}
 
-	/* We'll only start the txqs when the link is actually ready; make sure
-	 * we don't race against the link up notification, which may come
-	 * immediately after dpni_enable();
-	 */
-	netif_tx_stop_all_queues(net_dev);
-	enable_ch_napi(priv);
-	/* Also, explicitly set carrier off, otherwise netif_carrier_ok() will
-	 * return true and cause 'ip link show' to report the LOWER_UP flag,
-	 * even though the link notification wasn't even received.
-	 */
-	netif_carrier_off(net_dev);
+	if (priv->tx_pause_frames)
+		priv->refill_thresh = priv->num_bufs - DPAA2_ETH_BUFS_PER_CMD;
+	else
+		priv->refill_thresh = DPAA2_ETH_REFILL_THRESH_TD;
 
 	err = dpni_enable(priv->mc_io, 0, priv->mc_token);
 	if (err < 0) {
@@ -1213,48 +1214,16 @@ static int dpaa2_eth_open(struct net_device *net_dev)
 
 link_state_err:
 enable_err:
-	disable_ch_napi(priv);
+	priv->refill_thresh = 0;
 	drain_pool(priv);
 	return err;
-}
-
-/* The DPIO store must be empty when we call this,
- * at the end of every NAPI cycle.
- */
-static int drain_channel(struct dpaa2_eth_priv *priv,
-			 struct dpaa2_eth_channel *ch)
-{
-	int rx_drained = 0, tx_conf_drained = 0;
-	bool has_drained;
-
-	do {
-		pull_channel(ch);
-		has_drained = consume_frames(ch, &rx_drained, &tx_conf_drained);
-	} while (has_drained);
-
-	return rx_drained + tx_conf_drained;
-}
-
-static int drain_ingress_frames(struct dpaa2_eth_priv *priv)
-{
-	struct dpaa2_eth_channel *ch;
-	int i;
-	int drained = 0;
-
-	for (i = 0; i < priv->num_channels; i++) {
-		ch = priv->channel[i];
-		drained += drain_channel(priv, ch);
-	}
-
-	return drained;
 }
 
 static int dpaa2_eth_stop(struct net_device *net_dev)
 {
 	struct dpaa2_eth_priv *priv = netdev_priv(net_dev);
 	int dpni_enabled;
-	int retries = 10;
-	int drained;
+	int retries = 10, i;
 
 	netif_tx_stop_all_queues(net_dev);
 	netif_carrier_off(net_dev);
@@ -1276,18 +1245,12 @@ static int dpaa2_eth_stop(struct net_device *net_dev)
 		 */
 	}
 
-	/* Wait for NAPI to complete on every core and disable it.
-	 * In particular, this will also prevent NAPI from being rescheduled if
-	 * a new CDAN is serviced, effectively discarding the CDAN. We therefore
-	 * don't even need to disarm the channels, except perhaps for the case
-	 * of a huge coalescing value.
-	 */
-	disable_ch_napi(priv);
+	priv->refill_thresh = 0;
 
-	 /* Manually drain the Rx and TxConf queues */
-	drained = drain_ingress_frames(priv);
-	if (drained)
-		netdev_dbg(net_dev, "Drained %d frames.\n", drained);
+	/* Wait for all running napi poll routines to finish, so that no
+	 * new refill operations are started */
+	for (i = 0; i < priv->num_channels; i++)
+		napi_synchronize(&priv->channel[i]->napi);
 
 	/* Empty the buffer pool */
 	drain_pool(priv);
@@ -1997,7 +1960,6 @@ static int setup_dpbp(struct dpaa2_eth_priv *priv)
 
 	priv->bpid = dpbp_attrs.bpid;
 	priv->num_bufs = DPAA2_ETH_NUM_BUFS_FC / priv->num_channels;
-	priv->refill_thresh = priv->num_bufs - DPAA2_ETH_BUFS_PER_CMD;
 
 	return 0;
 
@@ -2197,6 +2159,7 @@ static int setup_dpni(struct fsl_mc_device *ls_dev)
 
 	/* Enable flow control */
 	cfg.options = DPNI_LINK_OPT_AUTONEG | DPNI_LINK_OPT_PAUSE;
+	priv->tx_pause_frames = 1;
 
 	err = dpni_set_link_cfg(priv->mc_io, 0, priv->mc_token, &cfg);
 	if (err) {
@@ -3052,6 +3015,7 @@ static int dpaa2_eth_probe(struct fsl_mc_device *dpni_dev)
 
 	/* Add a NAPI context for each channel */
 	add_ch_napi(priv);
+	enable_ch_napi(priv);
 
 	/* Percpu statistics */
 	priv->percpu_stats = alloc_percpu(*priv->percpu_stats);
@@ -3124,6 +3088,7 @@ err_netdev_init:
 err_alloc_percpu_extras:
 	free_percpu(priv->percpu_stats);
 err_alloc_percpu_stats:
+	disable_ch_napi(priv);
 	del_ch_napi(priv);
 err_bind:
 	free_dpbp(priv);
@@ -3165,6 +3130,7 @@ static int dpaa2_eth_remove(struct fsl_mc_device *ls_dev)
 	free_percpu(priv->percpu_stats);
 	free_percpu(priv->percpu_extras);
 
+	disable_ch_napi(priv);
 	del_ch_napi(priv);
 	free_dpbp(priv);
 	free_dpio(priv);
