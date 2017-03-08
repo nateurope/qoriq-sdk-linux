@@ -2003,6 +2003,8 @@ static int setup_dpbp(struct dpaa2_eth_priv *priv)
 	}
 
 	priv->bpid = dpbp_attrs.bpid;
+	priv->num_bufs = DPAA2_ETH_NUM_BUFS_FC / priv->num_channels;
+	priv->refill_thresh = priv->num_bufs - DPAA2_ETH_BUFS_PER_CMD;
 
 	return 0;
 
@@ -2207,9 +2209,6 @@ static int setup_dpni(struct fsl_mc_device *ls_dev)
 		goto err_set_link_cfg;
 	}
 
-	priv->num_bufs = DPAA2_ETH_NUM_BUFS_FC;
-	priv->refill_thresh = DPAA2_ETH_REFILL_THRESH_FC;
-
 	return 0;
 
 err_set_link_cfg:
@@ -2258,8 +2257,9 @@ int setup_fqs_taildrop(struct dpaa2_eth_priv *priv,
 		priv->num_bufs = DPAA2_ETH_NUM_BUFS_TD;
 		priv->refill_thresh = DPAA2_ETH_REFILL_THRESH_TD;
 	} else {
-		priv->num_bufs = DPAA2_ETH_NUM_BUFS_FC;
-		priv->refill_thresh = DPAA2_ETH_REFILL_THRESH_FC;
+		priv->num_bufs = DPAA2_ETH_NUM_BUFS_FC /
+			priv->num_channels;
+		priv->refill_thresh = priv->num_bufs - DPAA2_ETH_BUFS_PER_CMD;
 	}
 
 	for (i = 0; i < priv->num_fqs; i++) {
